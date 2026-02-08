@@ -11,19 +11,19 @@
   "dependencies": {
     "@tensorflow/tfjs": "^4.22.0",
     "firebase": "^12.3.0",
+    "i18next": "^23.7.16",
     "lucide-react": "^0.513.0",
-    "next": "15.3.3",
+    "next": "^16.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "recharts": "^2.15.4",
-    "i18next": "^23.7.16",
-    "react-i18next": "^14.0.5"
+    "react-i18next": "^14.0.5",
+    "recharts": "^2.15.4"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "eslint": "^9",
-    "eslint-config-next": "15.3.3",
+    "eslint-config-next": "^16.1.6",
     "tailwindcss": "^4"
   }
 }
