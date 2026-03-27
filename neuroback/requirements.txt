@@ -3,7 +3,7 @@ flask-cors==6.0.0
 flask-limiter==3.5.0
 joblib==1.5.1
 numpy==2.2.6
-onnxruntime==1.22.0
+onnxruntime>=1.22.0
 librosa==0.11.0
 opencv-python-headless==4.12.0.88
 Pillow==11.3.0
@@ -22,4 +22,6 @@ reportlab==4.0.9
 qrcode==7.4.2
 SpeechRecognition==3.10.4
 python-dotenv==1.0.1
+PyPDF2>=3.0.0
+python-docx>=1.0.0
 

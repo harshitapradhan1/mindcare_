@@ -1,7 +1,8 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { Brain, Menu, X, LogIn, LogOut, User } from 'lucide-react';
+import { Brain, Menu, X, LogIn, LogOut, User, MessageCircle, FileText } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
 
 const Navbar = () => {
   const router = useRouter();
@@ -139,22 +140,30 @@ const Navbar = () => {
           </div>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-6 text-sm font-semibold text-slate-600">
-            <a href="/dashboard" className="hover:text-teal-700 transition-colors">Dashboard</a>
-            <a href="/neurotwin" className="hover:text-teal-700 transition-colors">NeuroTwin</a>
-            <a href="/tests" className="hover:text-teal-700 transition-colors">Tests</a>
-            <a href="/research" className="hover:text-teal-700 transition-colors">Research</a>
-            <a href="/pricing" className="hover:text-teal-700 transition-colors">Pricing</a>
+          <div className="hidden xl:flex items-center justify-center flex-1 mx-4 gap-x-4 2xl:gap-x-6 text-sm font-semibold text-slate-600">
+            <Link href="/dashboard" className="hover:text-teal-700 transition-colors whitespace-nowrap">Dashboard</Link>
+            <Link href="/neurotwin" className="hover:text-teal-700 transition-colors whitespace-nowrap">NeuroTwin</Link>
+            <Link href="/tests" className="hover:text-teal-700 transition-colors whitespace-nowrap">Tests</Link>
+            <Link href="/simplify-report" className="hover:text-teal-700 transition-colors flex items-center gap-1 whitespace-nowrap">
+              <FileText className="w-4 h-4" />
+              Simplify Report
+            </Link>
+            <Link href="/support" className="hover:text-teal-700 transition-colors flex items-center gap-1 whitespace-nowrap">
+              <MessageCircle className="w-4 h-4" />
+              Support
+            </Link>
+            <Link href="/research" className="hover:text-teal-700 transition-colors whitespace-nowrap">Research</Link>
+            <Link href="/pricing" className="hover:text-teal-700 transition-colors whitespace-nowrap">Pricing</Link>
           </div>
 
           {/* Auth Buttons */}
-          <div className="hidden md:flex items-center">
+          <div className="hidden xl:flex items-center flex-shrink-0">
             <AuthButtons />
           </div>
 
           {/* Mobile menu button */}
           <button 
-            className="md:hidden p-2 rounded-xl hover:bg-white/70 transition-colors border border-white/60 glass-card"
+            className="xl:hidden p-2 rounded-xl hover:bg-white/70 transition-colors border border-white/60 glass-card"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
             {mobileMenuOpen ? <X className="w-6 h-6 text-teal-700" /> : <Menu className="w-6 h-6 text-teal-700" />}
@@ -164,13 +173,21 @@ const Navbar = () => {
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden glass-card mx-4 mt-2 rounded-3xl shadow-xl">
+        <div className="xl:hidden glass-card mx-4 mt-2 rounded-3xl shadow-xl">
           <div className="px-4 py-4 space-y-3">
-            <a href="/dashboard" className="block px-4 py-3 text-slate-700 hover:bg-white/70 rounded-xl transition-colors font-semibold">Dashboard</a>
-            <a href="/neurotwin" className="block px-4 py-3 text-slate-700 hover:bg-white/70 rounded-xl transition-colors font-semibold">NeuroTwin</a>
-            <a href="/tests" className="block px-4 py-3 text-slate-700 hover:bg-white/70 rounded-xl transition-colors font-semibold">Tests</a>
-            <a href="/research" className="block px-4 py-3 text-slate-700 hover:bg-white/70 rounded-xl transition-colors font-semibold">Research</a>
-            <a href="/pricing" className="block px-4 py-3 text-slate-700 hover:bg-white/70 rounded-xl transition-colors font-semibold">Pricing</a>
+            <Link href="/dashboard" className="block px-4 py-3 text-slate-700 hover:bg-white/70 rounded-xl transition-colors font-semibold">Dashboard</Link>
+            <Link href="/neurotwin" className="block px-4 py-3 text-slate-700 hover:bg-white/70 rounded-xl transition-colors font-semibold">NeuroTwin</Link>
+            <Link href="/tests" className="block px-4 py-3 text-slate-700 hover:bg-white/70 rounded-xl transition-colors font-semibold">Tests</Link>
+            <Link href="/simplify-report" className="block px-4 py-3 text-slate-700 hover:bg-white/70 rounded-xl transition-colors font-semibold flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              Simplify Report
+            </Link>
+            <Link href="/support" className="block px-4 py-3 text-slate-700 hover:bg-white/70 rounded-xl transition-colors font-semibold flex items-center gap-2">
+              <MessageCircle className="w-4 h-4" />
+              Support
+            </Link>
+            <Link href="/research" className="block px-4 py-3 text-slate-700 hover:bg-white/70 rounded-xl transition-colors font-semibold">Research</Link>
+            <Link href="/pricing" className="block px-4 py-3 text-slate-700 hover:bg-white/70 rounded-xl transition-colors font-semibold">Pricing</Link>
             <div className="border-t border-white/60 pt-4">
               <AuthButtons isMobile={true} />
             </div>

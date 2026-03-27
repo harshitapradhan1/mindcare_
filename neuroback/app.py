@@ -5,14 +5,10 @@ from flask_limiter.util import get_remote_address
 import joblib
 import numpy as np
 import os
-import onnxruntime as ort
-import librosa
 from datetime import datetime, timedelta
 import logging
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
-import cv2
-from PIL import Image
 import io
 import base64
 from sklearn.linear_model import LinearRegression, LogisticRegression
@@ -27,15 +23,14 @@ import uuid
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# OpenAI integration
+# Gemini integration
 try:
-    from openai import OpenAI
-    OPENAI_AVAILABLE = True
-    openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY')) if os.getenv('OPENAI_API_KEY') else None
+    import google.generativeai as genai
+    genai.configure(api_key="AIzaSyDMCx9x2_Ddc7hViF4B_YOYa7GqSS2LtL0")
+    GEMINI_AVAILABLE = True
 except ImportError:
-    OPENAI_AVAILABLE = False
-    openai_client = None
-    logger.warning("OpenAI not installed")
+    GEMINI_AVAILABLE = False
+    logger.warning("google-generativeai not installed")
 
 # PDF generation
 try:
@@ -48,6 +43,49 @@ except ImportError:
     PDF_AVAILABLE = False
     logger.warning("PDF generation libraries not installed")
 
+# Optional heavy imports - app runs with fallbacks if missing
+try:
+    import onnxruntime as ort
+    ONNXRUNTIME_AVAILABLE = True
+except ImportError:
+    ort = None
+    ONNXRUNTIME_AVAILABLE = False
+    logger.warning("onnxruntime not installed, speech model disabled")
+try:
+    import librosa
+    LIBROSA_AVAILABLE = True
+except ImportError:
+    librosa = None
+    LIBROSA_AVAILABLE = False
+    logger.warning("librosa not installed, audio analysis limited")
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError:
+    cv2 = None
+    CV2_AVAILABLE = False
+    logger.warning("opencv not installed, facial analysis limited")
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    Image = None
+    PIL_AVAILABLE = False
+    logger.warning("Pillow not installed, image processing limited")
+# Report text extraction (PDF, DOCX)
+try:
+    import PyPDF2
+    PDF_EXTRACT_AVAILABLE = True
+except ImportError:
+    PDF_EXTRACT_AVAILABLE = False
+    logger.warning("PyPDF2 not installed, PDF upload disabled for Simplify Report")
+try:
+    from docx import Document as DocxDocument
+    DOCX_EXTRACT_AVAILABLE = True
+except ImportError:
+    DocxDocument = None
+    DOCX_EXTRACT_AVAILABLE = False
+    logger.warning("python-docx not installed, DOCX upload disabled for Simplify Report")
 # Speech recognition
 try:
     import speech_recognition as sr
@@ -256,21 +294,16 @@ except Exception as e:
     cognitive_model = None
 
 speech_session = None
-try:
-    SPEECH_MODEL_PATH = os.path.join(os.path.dirname(__file__), 'model', 'speech_model.onnx')
-    if os.path.exists(SPEECH_MODEL_PATH):
-        try:
+if ONNXRUNTIME_AVAILABLE and ort:
+    try:
+        SPEECH_MODEL_PATH = os.path.join(os.path.dirname(__file__), 'model', 'speech_model.onnx')
+        if os.path.exists(SPEECH_MODEL_PATH):
             speech_session = ort.InferenceSession(SPEECH_MODEL_PATH)
             logger.info("Speech model loaded successfully")
-        except Exception as load_error:
-            logger.warning(f"Error loading speech model: {load_error}")
-            speech_session = None
-    else:
-        logger.warning(f"Speech model file not found at {SPEECH_MODEL_PATH}, using fallback analysis")
-        speech_session = None
-except Exception as e:
-    logger.warning(f"Error loading speech model (using fallback): {e}")
-    speech_session = None
+        else:
+            logger.warning(f"Speech model file not found at {SPEECH_MODEL_PATH}, using fallback analysis")
+    except Exception as e:
+        logger.warning(f"Error loading speech model (using fallback): {e}")
 
 # === Helper Functions ===
 def allowed_file(filename):
@@ -749,6 +782,18 @@ def extract_cognitive_metrics(test_results):
         metrics['attention'] = (metrics['executive_function'] + metrics['memory']) / 2.0
         metrics['processing_speed'] = 0.0  # Not primarily speed-dependent
     
+    # Quick Cognitive Check: Orientation, memory, attention
+    elif test_type == 'quick-check':
+        accuracy = test_results.get('accuracy', 0)
+        score = test_results.get('score', 0) / 100.0 if test_results.get('score') else accuracy
+        memory_pts = test_results.get('memory_points', 0)
+        orientation_pts = test_results.get('orientation_points', 0)
+        attention_pts = test_results.get('attention_points', 0)
+        metrics['memory'] = max(0.0, min(1.0, memory_pts / 3.0))
+        metrics['attention'] = max(0.0, min(1.0, (orientation_pts / 3.0 + attention_pts / 4.0) / 2.0))
+        metrics['executive_function'] = score * 0.8
+        metrics['speed'] = 0.5  # Not speed-focused
+
     # Generic cognitive game results
     elif 'accuracy' in test_results and 'reaction_time' in test_results:
         metrics['attention'] = float(test_results['accuracy'])
@@ -2827,20 +2872,13 @@ Recent test history: {len(history)} tests completed.
 
 Provide personalized, encouraging feedback. Be specific about improvements and offer actionable advice."""
         
-        if OPENAI_AVAILABLE and openai_client:
+        if GEMINI_AVAILABLE:
             try:
-                response = openai_client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=[
-                        {"role": "system", "content": context},
-                        {"role": "user", "content": message}
-                    ],
-                    temperature=0.7,
-                    max_tokens=300
-                )
-                coach_response = response.choices[0].message.content
+                model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=context)
+                response = model.generate_content(message, generation_config={"temperature": 0.7, "max_output_tokens": 300})
+                coach_response = response.text
             except Exception as e:
-                logger.error(f"OpenAI API error: {e}")
+                logger.error(f"Gemini API error: {e}")
                 # Fallback response
                 coach_response = generate_fallback_coach_response(current_metrics, history)
         else:
@@ -3294,41 +3332,18 @@ def analyze_screen():
             logger.error(f"OCR error: {e}")
             extracted_text = f"OCR error: {str(e)}"
         
-        # AI Analysis using OpenAI if available
-        ai_analysis = "Screen analysis complete. AI analysis requires OpenAI API key."
+        # AI Analysis using Gemini if available
+        ai_analysis = "Screen analysis complete. AI analysis requires Gemini API key."
         
-        if openai_client:
+        if GEMINI_AVAILABLE:
             try:
-                # Convert image to base64 for OpenAI
-                buffered = io.BytesIO()
-                image.save(buffered, format="PNG")
-                image_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
-                
-                # Use OpenAI Vision API
-                response = openai_client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": "Analyze this screenshot. Describe what you see, identify any important information, and provide insights. Be concise and helpful."
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": f"data:image/png;base64,{image_base64}"
-                                    }
-                                }
-                            ]
-                        }
-                    ],
-                    max_tokens=500
-                )
-                ai_analysis = response.choices[0].message.content
+                # Use Gemini Vision API
+                model = genai.GenerativeModel('gemini-2.5-flash')
+                prompt = "Analyze this screenshot. Describe what you see, identify any important information, and provide insights. Be concise and helpful."
+                response = model.generate_content([prompt, image], generation_config={"max_output_tokens": 500})
+                ai_analysis = response.text
             except Exception as e:
-                logger.error(f"OpenAI analysis error: {e}")
+                logger.error(f"Gemini analysis error: {e}")
                 ai_analysis = f"AI analysis error: {str(e)}"
         else:
             # Fallback analysis based on extracted text
@@ -3363,7 +3378,7 @@ def ask_screen_question():
         
         answer = "I need more context to answer your question."
         
-        if openai_client:
+        if GEMINI_AVAILABLE:
             try:
                 prompt = f"""Based on the following screen content and context, answer the user's question.
 
@@ -3374,17 +3389,11 @@ Question: {question}
 
 Provide a helpful and accurate answer:"""
                 
-                response = openai_client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": "You are a helpful assistant that analyzes screen content and answers questions about it."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    max_tokens=300
-                )
-                answer = response.choices[0].message.content
+                model = genai.GenerativeModel('gemini-2.5-flash', system_instruction="You are a helpful assistant that analyzes screen content and answers questions about it.")
+                response = model.generate_content(prompt, generation_config={"max_output_tokens": 300})
+                answer = response.text
             except Exception as e:
-                logger.error(f"OpenAI question error: {e}")
+                logger.error(f"Gemini question error: {e}")
                 answer = f"Error processing question: {str(e)}"
         else:
             # Simple fallback
@@ -3402,6 +3411,139 @@ Provide a helpful and accurate answer:"""
     except Exception as e:
         logger.error(f"Error answering question: {e}")
         return jsonify({"error": str(e)}), 500
+
+# === Simplify Report Endpoint ===
+SIMPLIFY_REPORT_SYSTEM_PROMPT = """You are an assistant that explains complex medical or cognitive reports in simple, easy-to-understand language for general users.
+
+CRITICAL RULES:
+- Simplify the content for a non-medical user
+- Use bullet points for clarity
+- Explain difficult terms in plain English
+- Highlight key findings in a neutral way
+- NEVER provide diagnosis or medical conclusions
+- NEVER use alarming language
+- AVOID: "disease detected", "you have", "risk of", "abnormal"
+- USE: "may indicate", "can be associated with", "some reports show"
+- Keep tone calm, reassuring, and educational
+- Output MUST include these exact sections with the headers:
+
+🧾 Summary
+(2-3 lines overall summary)
+
+🔍 Key Points
+(bullet list)
+
+📘 What This Means
+(simple explanation)
+
+⚠️ When to Seek Help
+(neutral suggestion - e.g., "Consider speaking with a healthcare provider if you have questions")
+
+📌 Disclaimer
+This explanation is for understanding only and not a medical diagnosis. Please consult a qualified healthcare professional for medical advice."""
+
+def extract_text_from_file(file_storage, filename):
+    """Extract text from uploaded file (PDF, TXT, DOCX)"""
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    content = file_storage.read()
+    
+    if ext == 'txt':
+        try:
+            return content.decode('utf-8', errors='replace')
+        except Exception:
+            return content.decode('latin-1', errors='replace')
+    
+    if ext == 'pdf' and PDF_EXTRACT_AVAILABLE:
+        try:
+            pdf_reader = PyPDF2.PdfReader(io.BytesIO(content))
+            text_parts = []
+            for page in pdf_reader.pages:
+                text_parts.append(page.extract_text() or '')
+            return '\n'.join(text_parts).strip()
+        except Exception as e:
+            logger.error(f"PDF extraction error: {e}")
+            raise ValueError("Could not extract text from PDF. The file may be corrupted or scanned.")
+    
+    if ext == 'docx' and DOCX_EXTRACT_AVAILABLE and DocxDocument:
+        try:
+            doc = DocxDocument(io.BytesIO(content))
+            return '\n'.join(p.text for p in doc.paragraphs).strip()
+        except Exception as e:
+            logger.error(f"DOCX extraction error: {e}")
+            raise ValueError("Could not extract text from DOCX file.")
+    
+    raise ValueError(f"Unsupported file type: {ext}. Use PDF, TXT, or DOCX.")
+
+@app.route('/api/simplify-report', methods=['POST'])
+@limiter.limit("10 per hour")
+def simplify_report():
+    """Simplify medical/cognitive reports into easy-to-understand language"""
+    try:
+        report_text = None
+        
+        # Handle file upload
+        if 'file' in request.files and request.files['file'].filename:
+            file = request.files['file']
+            filename = secure_filename(file.filename)
+            if not filename:
+                return jsonify({"error": "Invalid filename"}), 400
+            report_text = extract_text_from_file(file, filename)
+        # Handle pasted text (JSON or form)
+        elif request.is_json and request.json.get('text'):
+            report_text = request.json.get('text', '').strip()
+        elif request.form.get('text'):
+            report_text = request.form.get('text', '').strip()
+        
+        if not report_text or len(report_text) < 20:
+            return jsonify({
+                "error": "Please provide report text (at least 20 characters) or upload a PDF, TXT, or DOCX file."
+            }), 400
+        
+        if len(report_text) > 15000:
+            return jsonify({"error": "Report is too long. Please limit to 15,000 characters."}), 400
+        
+        # Call Gemini for simplification
+        if GEMINI_AVAILABLE:
+            try:
+                model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=SIMPLIFY_REPORT_SYSTEM_PROMPT)
+                prompt = f"Input report to simplify:\n\n{report_text[:12000]}"
+                response = model.generate_content(prompt, generation_config={"temperature": 0.3, "max_output_tokens": 1500})
+                simplified = response.text
+            except Exception as e:
+                logger.error(f"Gemini simplify error: {e}")
+                return jsonify({"error": "Unable to process report. Please try again later."}), 503
+        else:
+            # Fallback when Gemini not configured
+            simplified = """🧾 Summary
+This is a simplified overview of your report. For a detailed AI-powered simplification, please configure the OpenAI API key.
+
+🔍 Key Points
+• The report has been received
+• Full simplification requires AI processing
+
+📘 What This Means
+Reports often contain technical terms. A healthcare provider can help explain any findings in person.
+
+⚠️ When to Seek Help
+Consider speaking with a healthcare provider if you have questions about your report.
+
+📌 Disclaimer
+This explanation is for understanding only and not a medical diagnosis. Please consult a qualified healthcare professional for medical advice."""
+        
+        user_id = request.json.get('user_id', 'anonymous') if request.is_json else request.form.get('user_id', 'anonymous')
+        audit_log_request('/api/simplify-report', user_id, 'POST', 200)
+        
+        return jsonify({
+            "success": True,
+            "simplified": simplified,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error in simplify-report: {e}")
+        return jsonify({"error": "An error occurred. Please try again."}), 500
 
 # === Error Handlers ===
 @app.errorhandler(413)

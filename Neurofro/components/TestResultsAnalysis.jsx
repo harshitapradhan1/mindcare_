@@ -1,7 +1,9 @@
 "use client";
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 const TEST_NAMES = {
+  'quick-check': 'Quick Cognitive Check',
   'n-back': 'N-Back',
   'stroop': 'Stroop Test',
   'trail-making': 'Trail Making',
@@ -19,6 +21,7 @@ const TEST_NAMES = {
 
 const getTestIcon = (testType) => {
   const icons = {
+    'quick-check': '⚡',
     'n-back': '🧠',
     'stroop': '⚡',
     'trail-making': '🔄',
@@ -242,12 +245,12 @@ export default function TestResultsAnalysis({ userId }) {
             <div className="text-6xl mb-4">📊</div>
             <p className="text-gray-600 text-lg mb-2">No test results yet</p>
             <p className="text-gray-500 text-sm mb-4">Take a cognitive test to see your results and analysis here!</p>
-            <a 
+            <Link 
               href="/tests" 
               className="inline-block px-6 py-3 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg hover:from-teal-600 hover:to-blue-700 transition-all font-semibold shadow-md hover:shadow-lg"
             >
               Take a Test
-            </a>
+            </Link>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

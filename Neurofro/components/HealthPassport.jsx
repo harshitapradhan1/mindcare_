@@ -7,7 +7,7 @@ export default function HealthPassport({ userId }) {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
 
-  const API_BASE = 'http://localhost:5002/api';
+  const API_BASE = typeof window !== 'undefined' ? '/api/backend' : 'http://localhost:5002/api';
 
   const handleExport = async () => {
     setLoading(true);
