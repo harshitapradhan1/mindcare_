@@ -233,6 +233,39 @@ def save_neurotwin_to_file():
 # Load existing data on startup
 load_neurotwin_from_file()
 
+# Journal entries when MongoDB is unavailable: { user_id: [ { entry_id, user_id, text, tags, timestamp }, ... ] }
+JOURNAL_DATA_FILE = os.path.join(os.path.dirname(__file__), 'journal_data.json')
+journal_by_user = {}
+
+
+def load_journal_from_file():
+    """Load journal entries from JSON (fallback when MongoDB is not used)."""
+    global journal_by_user
+    if os.path.exists(JOURNAL_DATA_FILE):
+        try:
+            with open(JOURNAL_DATA_FILE, 'r', encoding='utf-8') as f:
+                journal_by_user = json.load(f)
+            if not isinstance(journal_by_user, dict):
+                journal_by_user = {}
+            logger.info(f"Loaded journal entries for {len(journal_by_user)} user(s) from file")
+        except Exception as e:
+            logger.warning(f"Error loading journal data from file: {e}")
+            journal_by_user = {}
+    else:
+        journal_by_user = {}
+
+
+def save_journal_to_file():
+    """Persist journal entries to disk."""
+    try:
+        with open(JOURNAL_DATA_FILE, 'w', encoding='utf-8') as f:
+            json.dump(journal_by_user, f, indent=2, ensure_ascii=False, default=str)
+    except Exception as e:
+        logger.error(f"Error saving journal data to file: {e}")
+
+
+load_journal_from_file()
+
 # In-memory storage for user records (signup data for analysis)
 user_records = {}  # {user_id: {user_record data}}
 user_profiles = {}  # {user_id: {profile data}}
@@ -3546,6 +3579,22 @@ This explanation is for understanding only and not a medical diagnosis. Please c
         return jsonify({"error": "An error occurred. Please try again."}), 500
 
 # === Journal Endpoints ===
+def _journal_entries_list_for_user(user_id, limit=None):
+    """Return journal entries for user, newest first (Mongo or file fallback)."""
+    uid = str(user_id)
+    if MONGO_AVAILABLE and db is not None:
+        cursor = db['journal_entries'].find({'user_id': uid}, {'_id': 0}).sort('timestamp', -1)
+        entries = list(cursor)
+        if limit:
+            entries = entries[:limit]
+        return entries
+    entries = list(journal_by_user.get(uid, []))
+    entries.sort(key=lambda e: e.get('timestamp', ''), reverse=True)
+    if limit:
+        entries = entries[:limit]
+    return entries
+
+
 @app.route('/api/journal', methods=['POST'])
 def create_journal_entry():
     """Create a new journal reflection entry"""
@@ -3568,6 +3617,11 @@ def create_journal_entry():
         
         if MONGO_AVAILABLE and db is not None:
             db['journal_entries'].insert_one(entry.copy())
+        else:
+            if user_id not in journal_by_user:
+                journal_by_user[user_id] = []
+            journal_by_user[user_id].append(entry)
+            save_journal_to_file()
             
         return jsonify({
             "success": True,
@@ -3581,12 +3635,7 @@ def create_journal_entry():
 def get_journal_entries(user_id):
     """Get all journal entries for a user"""
     try:
-        entries = []
-        if MONGO_AVAILABLE and db is not None:
-            # Sort by timestamp descending
-            cursor = db['journal_entries'].find({'user_id': str(user_id)}, {'_id': 0}).sort('timestamp', -1)
-            entries = list(cursor)
-            
+        entries = _journal_entries_list_for_user(user_id)
         return jsonify({
             "success": True,
             "entries": entries
@@ -3599,10 +3648,22 @@ def get_journal_entries(user_id):
 def delete_journal_entry(entry_id):
     """Delete a journal entry"""
     try:
+        eid = str(entry_id)
         if MONGO_AVAILABLE and db is not None:
-            result = db['journal_entries'].delete_one({'entry_id': str(entry_id)})
+            result = db['journal_entries'].delete_one({'entry_id': eid})
             if result.deleted_count == 0:
                 return jsonify({"error": "Entry not found"}), 404
+        else:
+            found = False
+            for uid in list(journal_by_user.keys()):
+                before = len(journal_by_user[uid])
+                journal_by_user[uid] = [e for e in journal_by_user[uid] if e.get('entry_id') != eid]
+                if len(journal_by_user[uid]) < before:
+                    found = True
+                    break
+            if not found:
+                return jsonify({"error": "Entry not found"}), 404
+            save_journal_to_file()
                 
         return jsonify({"success": True, "message": "Entry deleted"})
     except Exception as e:
@@ -3619,11 +3680,8 @@ def generate_journal_insights():
         if not GEMINI_AVAILABLE:
             return jsonify({"success": True, "insights": ["Please configure API to generate insights. Your entries are saved securely."]})
             
-        # Get recent entries
-        entries = []
-        if MONGO_AVAILABLE and db is not None:
-            cursor = db['journal_entries'].find({'user_id': user_id}).sort('timestamp', -1).limit(7)
-            entries = list(cursor)
+        # Get recent entries (Mongo or file-backed)
+        entries = _journal_entries_list_for_user(user_id, limit=7)
             
         if not entries:
             return jsonify({"success": True, "insights": ["Keep journaling! Insights will appear after a few entries."]})

@@ -5,35 +5,42 @@ import AuthGuard from '@/components/AuthGuard';
 import VoiceInput from '@/components/VoiceInput';
 import { ArrowLeft, Save, Loader2, Info } from 'lucide-react';
 
+const API_BASE = typeof window !== 'undefined' ? '/api/backend' : 'http://localhost:5002/api';
+
 export default function NewEntryPage() {
   const router = useRouter();
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
 
   const handleSave = async () => {
     if (!text.trim()) return;
     
     setSaving(true);
+    setSaveError(null);
     try {
-      const userId = localStorage.getItem('userId') || 'demo-user-123';
-      const res = await fetch('http://localhost:5002/api/journal', {
+      const userId = typeof window !== 'undefined' ? (localStorage.getItem('userId') || 'demo-user-123') : 'demo-user-123';
+      const res = await fetch(`${API_BASE}/journal`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           user_id: userId,
-          text: text,
+          text: text.trim(),
           tags: []
         }),
       });
       
-      if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
         router.push('/journal');
+        return;
       }
+      setSaveError(data.error || 'Could not save your entry. Is the server running?');
     } catch (error) {
       console.error("Error saving entry:", error);
-      alert("Failed to save entry. Please try again.");
+      setSaveError('Failed to save entry. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -80,6 +87,12 @@ export default function NewEntryPage() {
               </button>
             </div>
           </div>
+
+          {saveError && (
+            <div className="mt-4 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+              {saveError}
+            </div>
+          )}
 
           {/* Privacy Note */}
           <div className="mt-6 flex items-start gap-2 text-slate-400 text-sm bg-blue-50/50 p-4 rounded-xl border border-blue-100/50">

@@ -5,6 +5,8 @@ import AuthGuard from '@/components/AuthGuard';
 import JournalTimeline from '@/components/JournalTimeline';
 import { PencilLine, Sparkles, Loader2 } from 'lucide-react';
 
+const API_BASE = typeof window !== 'undefined' ? '/api/backend' : 'http://localhost:5002/api';
+
 export default function JournalPage() {
   const router = useRouter();
   const [entries, setEntries] = useState([]);
@@ -19,7 +21,7 @@ export default function JournalPage() {
   const fetchEntries = async () => {
     try {
       const userId = localStorage.getItem('userId') || 'demo-user-123';
-      const res = await fetch(`http://localhost:5002/api/journal/${userId}`);
+      const res = await fetch(`${API_BASE}/journal/${userId}`);
       if (res.ok) {
         const data = await res.json();
         setEntries(data.entries || []);
@@ -35,7 +37,7 @@ export default function JournalPage() {
     setLoadingInsights(true);
     try {
       const userId = localStorage.getItem('userId') || 'demo-user-123';
-      const res = await fetch('http://localhost:5002/api/journal/insights', {
+      const res = await fetch(`${API_BASE}/journal/insights`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -55,7 +57,7 @@ export default function JournalPage() {
 
   const handleDeleteEntry = async (entryId) => {
     try {
-      const res = await fetch(`http://localhost:5002/api/journal/${entryId}`, {
+      const res = await fetch(`${API_BASE}/journal/${entryId}`, {
         method: 'DELETE',
       });
       if (res.ok) {
