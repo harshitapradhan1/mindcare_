@@ -33,9 +33,14 @@ const EntryCard = ({ entry, onDelete }) => {
   return (
     <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm hover:shadow-md transition-shadow relative group">
       <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-2 text-slate-400 text-sm font-medium">
+        <div className="flex flex-wrap items-center gap-2 text-slate-400 text-sm font-medium">
           <Clock size={14} />
           {formatTime(entry.timestamp)}
+          {entry._savedOnDevice && (
+            <span className="text-[10px] uppercase tracking-wide bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-semibold">
+              This device only
+            </span>
+          )}
         </div>
         <button 
           onClick={() => {

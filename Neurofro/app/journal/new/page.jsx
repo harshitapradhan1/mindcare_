@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import AuthGuard from '@/components/AuthGuard';
 import VoiceInput from '@/components/VoiceInput';
 import { ArrowLeft, Save, Loader2, Info } from 'lucide-react';
+import { appendLocalJournalEntry } from '@/lib/journalStorage';
 
 const API_BASE = typeof window !== 'undefined' ? '/api/backend' : 'http://localhost:5002/api';
 
@@ -37,10 +38,45 @@ export default function NewEntryPage() {
         router.push('/journal');
         return;
       }
-      setSaveError(data.error || 'Could not save your entry. Is the server running?');
+      // Deployed site without backend: save on this device so the user does not lose the entry
+      const localEntry = {
+        entry_id:
+          typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `local-${Date.now()}`,
+        user_id: userId,
+        text: text.trim(),
+        tags: [],
+        timestamp: new Date().toISOString(),
+        _savedOnDevice: true,
+      };
+      appendLocalJournalEntry(userId, localEntry);
+      router.push('/journal?saved=device');
+      return;
     } catch (error) {
-      console.error("Error saving entry:", error);
-      setSaveError('Failed to save entry. Please try again.');
+      console.error('Error saving entry:', error);
+      try {
+        const userId =
+          typeof window !== 'undefined'
+            ? localStorage.getItem('userId') || 'demo-user-123'
+            : 'demo-user-123';
+        const localEntry = {
+          entry_id:
+            typeof crypto !== 'undefined' && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `local-${Date.now()}`,
+          user_id: userId,
+          text: text.trim(),
+          tags: [],
+          timestamp: new Date().toISOString(),
+          _savedOnDevice: true,
+        };
+        appendLocalJournalEntry(userId, localEntry);
+        router.push('/journal?saved=device');
+        return;
+      } catch {
+        setSaveError('Failed to save entry. Please try again.');
+      }
     } finally {
       setSaving(false);
     }

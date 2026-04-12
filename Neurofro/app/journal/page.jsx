@@ -1,33 +1,50 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import AuthGuard from '@/components/AuthGuard';
 import JournalTimeline from '@/components/JournalTimeline';
 import { PencilLine, Sparkles, Loader2 } from 'lucide-react';
+import {
+  mergeJournalEntries,
+  removeLocalJournalEntry,
+} from '@/lib/journalStorage';
 
 const API_BASE = typeof window !== 'undefined' ? '/api/backend' : 'http://localhost:5002/api';
 
-export default function JournalPage() {
+function JournalPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [insights, setInsights] = useState([]);
   const [loadingInsights, setLoadingInsights] = useState(false);
+  const [deviceSaveNotice, setDeviceSaveNotice] = useState(false);
 
   useEffect(() => {
     fetchEntries();
   }, []);
 
+  useEffect(() => {
+    if (searchParams.get('saved') === 'device') {
+      setDeviceSaveNotice(true);
+      router.replace('/journal', { scroll: false });
+    }
+  }, [searchParams, router]);
+
   const fetchEntries = async () => {
     try {
       const userId = localStorage.getItem('userId') || 'demo-user-123';
       const res = await fetch(`${API_BASE}/journal/${userId}`);
+      let serverList = [];
       if (res.ok) {
         const data = await res.json();
-        setEntries(data.entries || []);
+        serverList = data.entries || [];
       }
+      setEntries(mergeJournalEntries(serverList, userId));
     } catch (error) {
-      console.error("Error fetching entries:", error);
+      console.error('Error fetching entries:', error);
+      const userId = localStorage.getItem('userId') || 'demo-user-123';
+      setEntries(mergeJournalEntries([], userId));
     } finally {
       setLoading(false);
     }
@@ -56,22 +73,40 @@ export default function JournalPage() {
   };
 
   const handleDeleteEntry = async (entryId) => {
+    const userId = localStorage.getItem('userId') || 'demo-user-123';
+    const target = entries.find((e) => e.entry_id === entryId);
+    if (target?._savedOnDevice) {
+      removeLocalJournalEntry(userId, entryId);
+      setEntries((prev) => prev.filter((e) => e.entry_id !== entryId));
+      return;
+    }
     try {
       const res = await fetch(`${API_BASE}/journal/${entryId}`, {
         method: 'DELETE',
       });
       if (res.ok) {
-        setEntries(entries.filter(e => e.entry_id !== entryId));
+        setEntries((prev) => prev.filter((e) => e.entry_id !== entryId));
+        return;
       }
     } catch (error) {
-      console.error("Error deleting entry:", error);
+      console.error('Error deleting entry:', error);
     }
+    removeLocalJournalEntry(userId, entryId);
+    setEntries((prev) => prev.filter((e) => e.entry_id !== entryId));
   };
 
   return (
-    <AuthGuard>
+    <>
       <div className="min-h-screen bg-slate-50 pt-24 pb-12 px-4">
         <div className="max-w-4xl mx-auto">
+          {deviceSaveNotice && (
+            <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-sm">
+              <strong>Saved on this device.</strong> The server could not be reached (common on
+              Vercel until you set <code className="bg-amber-100 px-1 rounded">NEXT_PUBLIC_API_URL</code>{' '}
+              to your live API). Your entry is stored in this browser only.
+            </div>
+          )}
+
           {/* Header */}
           <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 mb-8 flex flex-col md:flex-row items-center justify-between gap-6">
             <div>
@@ -132,6 +167,22 @@ export default function JournalPage() {
           )}
         </div>
       </div>
+    </>
+  );
+}
+
+export default function JournalPage() {
+  return (
+    <AuthGuard>
+      <Suspense
+        fallback={
+          <div className="min-h-screen bg-slate-50 pt-24 flex justify-center px-4">
+            <Loader2 className="animate-spin text-blue-500 mt-20" size={32} />
+          </div>
+        }
+      >
+        <JournalPageInner />
+      </Suspense>
     </AuthGuard>
   );
 }
