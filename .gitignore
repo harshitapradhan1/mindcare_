@@ -36,6 +36,7 @@ env/
 # Runtime data (neuroback)
 neuroback/neurotwin_data.json
 neuroback/neurotwin_data.bak.*
+neuroback/journal_data.json
 neuroback/uploads/
 
 # IDE
