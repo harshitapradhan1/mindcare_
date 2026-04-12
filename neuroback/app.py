@@ -3698,7 +3698,7 @@ CRITICAL CONSTRAINTS:
 5. Return plain text.'''
 
         model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=system_instruction)
-        response = model.generate_content(f"Here are my recent journal entries. Give me a brief, supportive insight:\\n\\n{combined_text}", generation_config={"temperature": 0.5, "max_output_tokens": 150})
+        response = model.generate_content(f"Here are my recent journal entries. Give me a brief, supportive insight:\\n\\n{combined_text}", generation_config={"temperature": 0.5})
         
         return jsonify({
             "success": True,
