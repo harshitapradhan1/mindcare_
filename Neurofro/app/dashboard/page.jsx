@@ -108,6 +108,26 @@ export default function DashboardPage() {
           </a>
         </div>
 
+        {/* Mind Journal - Daily Reflection */}
+        <div className="mb-6">
+          <a
+            href="/journal"
+            className="block bg-white rounded-xl p-6 shadow-lg border border-gray-200 hover:shadow-xl hover:border-blue-200 transition-all"
+          >
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
+                <div className="text-2xl">📓</div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-gray-900 mb-2">Mind Journal</h3>
+                <p className="text-sm text-gray-600">
+                  Write or speak your daily reflection to track your cognitive wellness journey.
+                </p>
+              </div>
+            </div>
+          </a>
+        </div>
+
         {/* Professional Support - Optional, calm, non-intrusive */}
         <div className="mb-6">
           <ProfessionalSupportCard variant="card" />

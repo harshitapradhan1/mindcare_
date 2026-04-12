@@ -3545,6 +3545,111 @@ This explanation is for understanding only and not a medical diagnosis. Please c
         logger.error(f"Error in simplify-report: {e}")
         return jsonify({"error": "An error occurred. Please try again."}), 500
 
+# === Journal Endpoints ===
+@app.route('/api/journal', methods=['POST'])
+def create_journal_entry():
+    """Create a new journal reflection entry"""
+    try:
+        data = request.json
+        user_id = str(data.get('user_id', 'demo-user-123'))
+        text = data.get('text', '').strip()
+        tags = data.get('tags', [])
+        
+        if not text:
+            return jsonify({"error": "Journal text cannot be empty"}), 400
+            
+        entry = {
+            'entry_id': str(uuid.uuid4()),
+            'user_id': user_id,
+            'text': text,
+            'tags': tags,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        if MONGO_AVAILABLE and db is not None:
+            db['journal_entries'].insert_one(entry.copy())
+            
+        return jsonify({
+            "success": True,
+            "entry": entry
+        })
+    except Exception as e:
+        logger.error(f"Error creating journal entry: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/journal/<user_id>', methods=['GET'])
+def get_journal_entries(user_id):
+    """Get all journal entries for a user"""
+    try:
+        entries = []
+        if MONGO_AVAILABLE and db is not None:
+            # Sort by timestamp descending
+            cursor = db['journal_entries'].find({'user_id': str(user_id)}, {'_id': 0}).sort('timestamp', -1)
+            entries = list(cursor)
+            
+        return jsonify({
+            "success": True,
+            "entries": entries
+        })
+    except Exception as e:
+        logger.error(f"Error fetching journal entries: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/journal/<entry_id>', methods=['DELETE'])
+def delete_journal_entry(entry_id):
+    """Delete a journal entry"""
+    try:
+        if MONGO_AVAILABLE and db is not None:
+            result = db['journal_entries'].delete_one({'entry_id': str(entry_id)})
+            if result.deleted_count == 0:
+                return jsonify({"error": "Entry not found"}), 404
+                
+        return jsonify({"success": True, "message": "Entry deleted"})
+    except Exception as e:
+        logger.error(f"Error deleting journal entry: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/journal/insights', methods=['POST'])
+def generate_journal_insights():
+    """Generate safe, non-diagnostic insights from recent journal entries"""
+    try:
+        data = request.json
+        user_id = str(data.get('user_id', 'demo-user-123'))
+        
+        if not GEMINI_AVAILABLE:
+            return jsonify({"success": True, "insights": ["Please configure API to generate insights. Your entries are saved securely."]})
+            
+        # Get recent entries
+        entries = []
+        if MONGO_AVAILABLE and db is not None:
+            cursor = db['journal_entries'].find({'user_id': user_id}).sort('timestamp', -1).limit(7)
+            entries = list(cursor)
+            
+        if not entries:
+            return jsonify({"success": True, "insights": ["Keep journaling! Insights will appear after a few entries."]})
+            
+        # Combine text for analysis
+        combined_text = "\\n---\\n".join([e.get('text', '') for e in entries])
+        
+        system_instruction = '''You are a supportive, calm AI that analyzes a user's daily journal entries. 
+CRITICAL CONSTRAINTS:
+1. absolutely NO diagnosis or clinical terms (e.g. no "depression", "anxiety").
+2. Use soft language only: "patterns suggest", "you may be feeling", "seems like".
+3. Validate their feelings gently.
+4. Keep insights to 2-3 brief, supportive sentences highlighting positive habits or noting general stress/tiredness without sounding medical.
+5. Return plain text.'''
+
+        model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=system_instruction)
+        response = model.generate_content(f"Here are my recent journal entries. Give me a brief, supportive insight:\\n\\n{combined_text}", generation_config={"temperature": 0.5, "max_output_tokens": 150})
+        
+        return jsonify({
+            "success": True,
+            "insights": [response.text]
+        })
+    except Exception as e:
+        logger.error(f"Error generating insights: {e}")
+        return jsonify({"error": "Could not generate insights at this time."}), 500
+
 # === Error Handlers ===
 @app.errorhandler(413)
 def request_entity_too_large(error):

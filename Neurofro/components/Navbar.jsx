@@ -143,6 +143,7 @@ const Navbar = () => {
           <div className="hidden xl:flex items-center justify-center flex-1 mx-4 gap-x-4 2xl:gap-x-6 text-sm font-semibold text-slate-600">
             <Link href="/dashboard" className="hover:text-teal-700 transition-colors whitespace-nowrap">Dashboard</Link>
             <Link href="/neurotwin" className="hover:text-teal-700 transition-colors whitespace-nowrap">NeuroTwin</Link>
+            <Link href="/journal" className="hover:text-teal-700 transition-colors whitespace-nowrap">Journal</Link>
             <Link href="/tests" className="hover:text-teal-700 transition-colors whitespace-nowrap">Tests</Link>
             <Link href="/simplify-report" className="hover:text-teal-700 transition-colors flex items-center gap-1 whitespace-nowrap">
               <FileText className="w-4 h-4" />
@@ -177,6 +178,7 @@ const Navbar = () => {
           <div className="px-4 py-4 space-y-3">
             <Link href="/dashboard" className="block px-4 py-3 text-slate-700 hover:bg-white/70 rounded-xl transition-colors font-semibold">Dashboard</Link>
             <Link href="/neurotwin" className="block px-4 py-3 text-slate-700 hover:bg-white/70 rounded-xl transition-colors font-semibold">NeuroTwin</Link>
+            <Link href="/journal" className="block px-4 py-3 text-slate-700 hover:bg-white/70 rounded-xl transition-colors font-semibold">Journal</Link>
             <Link href="/tests" className="block px-4 py-3 text-slate-700 hover:bg-white/70 rounded-xl transition-colors font-semibold">Tests</Link>
             <Link href="/simplify-report" className="block px-4 py-3 text-slate-700 hover:bg-white/70 rounded-xl transition-colors font-semibold flex items-center gap-2">
               <FileText className="w-4 h-4" />
